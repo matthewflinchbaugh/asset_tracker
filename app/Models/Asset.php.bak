@@ -1,0 +1,63 @@
+<?php
+namespace App\Models;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Asset extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'department_id',
+        'category_id',
+        'parent_asset_id',
+        'created_by_user_id',
+        'asset_tag_id',
+        'temp_asset_tag_id',
+        'status',
+        'name',
+        'manufacturer',
+        'model_number',
+        'serial_number',
+        'location',
+        'documentation_link',
+        'purchase_cost',
+        'purchase_date',
+        'warranty_expiration_date',
+        'pm_interval_value',
+        'pm_interval_unit',
+        'next_pm_due_date',
+        'pm_procedure_notes',
+        'commissioning_notes',
+    ];
+
+    public function department() { return $this->belongsTo(Department::class); }
+    public function category() { return $this->belongsTo(Tag::class, 'category_id'); }
+    public function tags() { return $this->belongsToMany(Tag::class, 'asset_tag', 'asset_id', 'category_id'); }
+    public function parent() { return $this->belongsTo(Asset::class, 'parent_asset_id'); }
+    public function children() { return $this->hasMany(Asset::class, 'parent_asset_id'); }
+    public function creator() { return $this->belongsTo(User::class, 'created_by_user_id'); }
+    public function maintenanceLogs() { return $this->hasMany(MaintenanceLog::class); }
+
+    /**
+     * Checklist templates assigned to this asset (many-to-many via pivot).
+     */
+    public function checklistTemplates()
+    {
+        return $this->belongsToMany(
+            ChecklistTemplate::class,
+            'asset_checklist_template'
+        )->withPivot('component_name');
+    }
+
+    public function getTotalRepairCost($laborRate = 75.00)
+    {
+        if (!$this->relationLoaded('maintenanceLogs')) {
+            $this->load('maintenanceLogs');
+        }
+        $partsCost = $this->maintenanceLogs->sum('parts_cost');
+        $laborHours = $this->maintenanceLogs->sum('labor_hours');
+        $laborCost = $laborHours * $laborRate;
+        return $partsCost + $laborCost;
+    }
+}

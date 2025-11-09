@@ -1,0 +1,70 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Asset;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use App\Traits\WebhookSender; // Include Webhook Trait
+
+class AssetLocationController extends Controller
+{
+    use WebhookSender; // Use Webhook Trait
+
+    /**
+     * Show the form for editing the asset's location.
+     */
+    public function edit(Asset $asset)
+    {
+        // Ensure user has permission to view this asset
+        $user = Auth::user();
+        if ($user->role === 'technician') {
+            if (!$user->relationLoaded('visibleCategories')) {
+                $user->load('visibleCategories');
+            }
+            $allowedCategoryIds = $user->visibleCategories->pluck('id');
+            // We also need to check tags
+            $allowedTagIds = $user->visibleCategories->pluck('id'); 
+            
+            if (!$allowedCategoryIds->contains($asset->category_id) && !$asset->tags->pluck('id')->intersect($allowedTagIds)->isNotEmpty()) {
+                return redirect()->route('assets.index')->with('error', 'You do not have permission to view this asset.');
+            }
+        }
+        
+        return view('technician.assets.edit_location', compact('asset'));
+    }
+
+    /**
+     * Update the asset's location in storage.
+     */
+    public function update(Request $request, Asset $asset)
+    {
+        $user = Auth::user();
+        if ($user->role === 'technician') {
+            if (!$user->relationLoaded('visibleCategories')) {
+                $user->load('visibleCategories');
+            }
+            $allowedCategoryIds = $user->visibleCategories->pluck('id');
+            // We also need to check tags
+            $allowedTagIds = $user->visibleCategories->pluck('id'); 
+            
+            if (!$allowedCategoryIds->contains($asset->category_id) && !$asset->tags->pluck('id')->intersect($allowedTagIds)->isNotEmpty()) {
+                return redirect()->route('assets.index')->with('error', 'You do not have permission to edit this asset.');
+            }
+        }
+
+        $validated = $request->validate([
+            'location' => 'required|string|max:255',
+        ]);
+
+        $asset->update([
+            'location' => $validated['location'],
+        ]);
+
+        // Trigger webhook for asset update
+        $this->sendWebhooks('ASSET_UPDATED', $asset);
+
+        return redirect()->route('assets.show', $asset->id)
+                         ->with('success', 'Asset location updated successfully.');
+    }
+}

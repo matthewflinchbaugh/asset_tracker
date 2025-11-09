@@ -1,0 +1,118 @@
+<x-app-layout>
+    <x-slot name="header">
+        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+            {{ __('Edit Asset') }}: {{ $asset->name }}
+        </h2>
+    </x-slot>
+
+    <div class="py-12">
+        <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
+            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                <div class="p-6 text-gray-900">
+                    
+                    @if ($errors->any())
+                        <div class="mb-4 p-4 bg-red-100 text-red-700 rounded">
+                            <strong>Whoops! Something went wrong.</strong>
+                            <ul class="mt-2 list-disc list-inside">
+                                @foreach ($errors->all() as $error)
+                                    <li>{{ $error }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+
+                    <div class="overflow-x-auto">
+<form action="{{ route('assets.update', $asset->id) }}" method="POST">
+                        @csrf
+                        @method('PUT')
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <!-- Column 1 -->
+                            <div>
+                                <h4 class="text-lg font-medium text-gray-900 mb-4">Core Details</h4>
+                                <!-- Name -->
+                                <div>
+                                    <label for="name" class="block font-medium text-sm text-gray-700">Asset Name *</label>
+                                    <input type="text" name="name" id="name" value="{{ old('name', $asset->name) }}" required 
+                                           class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                                </div>
+
+                                <!-- Department -->
+                                
+                            </div>
+
+                            <!-- Column 2 -->
+                            <div>
+                                <h4 class="text-lg font-medium text-gray-900 mb-4">Financial & PM</h4>
+                                <!-- Purchase Cost -->
+                                <div>
+                                    <label for="purchase_cost" class="block font-medium text-sm text-gray-700">Purchase Cost</label>
+                                    <input type="number" name="purchase_cost" id="purchase_cost" value="{{ old('purchase_cost', $asset->purchase_cost) }}" step="0.01" min="0"
+                                           class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                                </div>
+
+                                <!-- Purchase Date -->
+                                <div class="mt-4">
+                                    <label for="purchase_date" class="block font-medium text-sm text-gray-700">Purchase Date</label>
+                                    <input type="date" name="purchase_date" id="purchase_date" value="{{ old('purchase_date', $asset->purchase_date) }}"
+                                           class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                                </div>
+                                
+                                <!-- Warranty Expiration -->
+<!-- Appended PM assignments (no </form> found) -->
+<div class="mt-4">
+                                    <label for="department_id" class="block font-medium text-sm text-gray-700">Department *</label>
+                                    <select name="department_id" id="department_id" required class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                                        @foreach ($departments as $department)
+                                            <option value="{{ $department->id }}" {{ old('department_id', $asset->department_id) == $department->id ? 'selected' : '' }}>
+                                                {{ $department->name }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+
+                                <!-- Primary Tag Group -->
+                                <div class="mt-4">
+                                    <label for="category_id" class="block font-medium text-sm text-gray-700">Primary Tag Group *</label>
+                                    <select name="category_id" id="category_id" required class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                                        <option value="">Select a tag group...</option>
+                                        @foreach ($tags as $tag)
+                                            <option value="{{ $tag->id }}" {{ old('category_id', $asset->category_id) == $tag->id ? 'selected' : '' }}>
+                                                {{ $tag->name }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                
+                                <!-- Tags (Multi-Select) -->
+                                <div class="mt-4">
+                                    <label for="tag_ids" class="block font-medium text-sm text-gray-700">Additional Tags</label>
+                                    <select name="tag_ids[]" id="tag_ids" multiple class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                                        @foreach ($tags as $tag)
+                                            <option value="{{ $tag->id }}" {{ in_array($tag->id, $assignedTagIds) ? 'selected' : '' }}>
+                                                {{ $tag->name }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+
+                                <!-- Parent Asset -->
+                                <div class="mt-4">
+                                    <label for="parent_asset_id" class="block font-medium text-sm text-gray-700">Parent Asset</label>
+                                    <select name="parent_asset_id" id="parent_asset_id" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                                        <option value="">No Parent Asset</option>
+                                        @foreach ($availableChildren as $assetOption)
+                                            <option value="{{ $assetOption->id }}" 
+                                                    {{ old('parent_asset_id', $asset->parent_asset_id) == $assetOption->id ? 'selected' : '' }}>
+                                                {{ $assetOption->name }} ({{ $assetOption->asset_tag_id }})
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                
+                                <!-- Location -->
+                                <div class="mt-4">
+                                    <label for="location" class="block font-medium text-sm text-gray-700">Location</label>
+                                    <input type="text" name="location" id="location" value="{{ old('location', $asset->location) }}"
+                                           class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                                </div>

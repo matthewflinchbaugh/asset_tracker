@@ -1,0 +1,240 @@
+<x-app-layout>
+    <x-slot name="header">
+        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+            {{ __('Edit Asset') }}: {{ $asset->name }}
+        </h2>
+    </x-slot>
+
+    <div class="py-12">
+        <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
+            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                <div class="p-6 text-gray-900">
+                    
+                    @if ($errors->any())
+                        <div class="mb-4 p-4 bg-red-100 text-red-700 rounded">
+                            <strong>Whoops! Something went wrong.</strong>
+                            <ul class="mt-2 list-disc list-inside">
+                                @foreach ($errors->all() as $error)
+                                    <li>{{ $error }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+
+                    <div class="overflow-x-auto">
+<form action="{{ route('assets.update', $asset->id) }}" method="POST">
+                        @csrf
+                        @method('PUT')
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <!-- Column 1 -->
+                            <div>
+                                <h4 class="text-lg font-medium text-gray-900 mb-4">Core Details</h4>
+                                <!-- Name -->
+                                <div>
+                                    <label for="name" class="block font-medium text-sm text-gray-700">Asset Name *</label>
+                                    <input type="text" name="name" id="name" value="{{ old('name', $asset->name) }}" required 
+                                           class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                                </div>
+
+                                <!-- Department -->
+                                <div class="mt-4">
+                                    <label for="department_id" class="block font-medium text-sm text-gray-700">Department *</label>
+                                    <select name="department_id" id="department_id" required class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                                        @foreach ($departments as $department)
+                                            <option value="{{ $department->id }}" {{ old('department_id', $asset->department_id) == $department->id ? 'selected' : '' }}>
+                                                {{ $department->name }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+
+                                <!-- Primary Tag Group -->
+                                <div class="mt-4">
+                                    <label for="category_id" class="block font-medium text-sm text-gray-700">Primary Tag Group *</label>
+                                    <select name="category_id" id="category_id" required class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                                        <option value="">Select a tag group...</option>
+                                        @foreach ($tags as $tag)
+                                            <option value="{{ $tag->id }}" {{ old('category_id', $asset->category_id) == $tag->id ? 'selected' : '' }}>
+                                                {{ $tag->name }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                
+                                <!-- Tags (Multi-Select) -->
+                                <div class="mt-4">
+                                    <label for="tag_ids" class="block font-medium text-sm text-gray-700">Additional Tags</label>
+                                    <select name="tag_ids[]" id="tag_ids" multiple class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                                        @foreach ($tags as $tag)
+                                            <option value="{{ $tag->id }}" {{ in_array($tag->id, $assignedTagIds) ? 'selected' : '' }}>
+                                                {{ $tag->name }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+
+                                <!-- Parent Asset -->
+                                <div class="mt-4">
+                                    <label for="parent_asset_id" class="block font-medium text-sm text-gray-700">Parent Asset</label>
+                                    <select name="parent_asset_id" id="parent_asset_id" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                                        <option value="">No Parent Asset</option>
+                                        @foreach ($availableChildren as $assetOption)
+                                            <option value="{{ $assetOption->id }}" 
+                                                    {{ old('parent_asset_id', $asset->parent_asset_id) == $assetOption->id ? 'selected' : '' }}>
+                                                {{ $assetOption->name }} ({{ $assetOption->asset_tag_id }})
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                
+                                <!-- Location -->
+                                <div class="mt-4">
+                                    <label for="location" class="block font-medium text-sm text-gray-700">Location</label>
+                                    <input type="text" name="location" id="location" value="{{ old('location', $asset->location) }}"
+                                           class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                                </div>
+                            </div>
+
+                            <!-- Column 2 -->
+                            <div>
+                                <h4 class="text-lg font-medium text-gray-900 mb-4">Financial & PM</h4>
+                                <!-- Purchase Cost -->
+                                <div>
+                                    <label for="purchase_cost" class="block font-medium text-sm text-gray-700">Purchase Cost</label>
+                                    <input type="number" name="purchase_cost" id="purchase_cost" value="{{ old('purchase_cost', $asset->purchase_cost) }}" step="0.01" min="0"
+                                           class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                                </div>
+
+                                <!-- Purchase Date -->
+                                <div class="mt-4">
+                                    <label for="purchase_date" class="block font-medium text-sm text-gray-700">Purchase Date</label>
+                                    <input type="date" name="purchase_date" id="purchase_date" value="{{ old('purchase_date', $asset->purchase_date) }}"
+                                           class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                                </div>
+                                
+                                <!-- Warranty Expiration -->
+                                <div class="mt-4">
+                                    <label for="warranty_expiration_date" class="block font-medium text-sm text-gray-700">Warranty Expiration</label>
+                                    <input type="date" name="warranty_expiration_date" id="warranty_expiration_date" value="{{ old('warranty_expiration_date', $asset->warranty_expiration_date) }}"
+                                           class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                                </div>
+
+                                <!-- PM Checklist Assignments -->
+                                <div class="mt-4">
+                                    <h5 class="text-lg font-medium text-gray-900 mb-2">PM Checklist Assignments</h5>
+                                    <div id="assignment-container">
+                                        @if ($asset->checklistTemplates->count())
+                                            @foreach($asset->checklistTemplates as $idx => $assignment)
+                                                <div class="assignment-row flex flex-col md:flex-row items-start md:items-center space-y-2 md:space-y-0 md:space-x-2 mb-2">
+                                                    <select name="checklist_assignments[{{ $idx }}][template_id]" class="w-full md:w-auto rounded-md shadow-sm border-gray-300">
+                                                    <option value="">None (Use standard log form)</option>
+                                                    <option value="">None (Use standard log form)</option>
+                                                        @foreach ($checklistTemplates as $template)
+                                                            <option value="{{ $template->id }}" {{ $assignment->pivot->checklist_template_id == $template->id ? 'selected' : '' }}>{{ $template->name }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                    <input type="text" name="checklist_assignments[{{ $idx }}][component_name]" value="{{ $assignment->pivot->component_name }}" placeholder="Component name" class="w-full md:w-auto rounded-md shadow-sm border-gray-300">
+                                                    <button type="button" class="self-start md:self-center remove-row text-red-600 text-xs">Remove</button>
+                                                </div>
+                                            @endforeach
+                                        @else
+                                            <div class="assignment-row flex flex-col md:flex-row items-start md:items-center space-y-2 md:space-y-0 md:space-x-2 mb-2">
+                                                <select name="checklist_assignments[0][template_id]" class="w-full md:w-auto rounded-md shadow-sm border-gray-300">
+                                                    <option value="">None (Use standard log form)</option>
+                                                    <option value="">None (Use standard log form)</option>
+                                                    @foreach ($checklistTemplates as $template)
+                                                        <option value="{{ $template->id }}">{{ $template->name }}</option>
+                                                    @endforeach
+                                                </select>
+                                                <input type="text" name="checklist_assignments[0][component_name]" placeholder="Component name" class="w-full md:w-auto rounded-md shadow-sm border-gray-300">
+                                                <button type="button" class="self-start md:self-center remove-row text-red-600 text-xs">Remove</button>
+                                            </div>
+                                        @endif
+                                    </div>
+                                    <button type="button"  class="mt-2 px-2 py-1 bg-indigo-600 text-white rounded text-xs" onclick="addAssignmentRow()">Add PM Template</button>
+                                </div>
+                                <!-- PM Procedure -->
+                                <div class="mt-4">
+                                    <label for="pm_procedure_notes" class="block font-medium text-sm text-gray-700">Standard PM Procedure Notes</label>
+                                    <textarea name="pm_procedure_notes" id="pm_procedure_notes" rows="4"
+                                              class="block mt-1 w-full rounded-md shadow-sm border-gray-300">{{ old('pm_procedure_notes', $asset->pm_procedure_notes) }}</textarea>
+                                </div>
+                            </div>
+                        </div> <!-- End Grid -->
+                        
+                        <!-- Child Asset Selection -->
+                        <div class="mt-6 border-t pt-6">
+                             <h4 class="text-lg font-medium text-gray-900 mb-4">Manage Child Components (Hierarchy)</h4>
+                             <label for="child_asset_ids" class="block font-medium text-sm text-gray-700">Available Components</label>
+                             <select name="child_asset_ids[]" id="child_asset_ids" multiple class="block mt-1 w-full rounded-md shadow-sm border-gray-300" style="height: 200px;">
+                                 @foreach ($availableChildren as $childOption)
+                                     <option value="{{ $childOption->id }}" 
+                                             {{ in_array($childOption->id, $assignedChildIds) ? 'selected' : '' }}>
+                                         {{ $childOption->name }} ({{ $childOption->asset_tag_id }})
+                                     </option>
+                                 @endforeach
+                             </select>
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="flex items-center justify-end mt-6 border-t pt-6">
+                            <a href="{{ route('assets.show', $asset->id) }}" class="text-gray-600 hover:text-gray-900 mr-4">
+                                Cancel
+                            </a>
+                            <button type="submit" class="inline-flex items-center px-4 py-2 bg-gray-800 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-700">
+                                Update Asset
+                            </button>
+                        </div>
+                    </form>
+</div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</x-app-layout>
+
+
+
+<script>
+function addAssignmentRow(event) {
+    var container = document.getElementById('assignment-container');
+    if (!container) return;
+    var rows = container.getElementsByClassName('assignment-row');
+    var newIndex = rows.length;
+    if (rows.length === 0) return;
+    var clone = rows[0].cloneNode(true);
+
+    // Update names for select and input
+    var sel = clone.querySelector('select');
+    if (sel) {
+        sel.name = 'checklist_assignments[' + newIndex + '][template_id]';
+        sel.value = '';
+    }
+    var inp = clone.querySelector('input[type="text"]');
+    if (inp) {
+        inp.name = 'checklist_assignments[' + newIndex + '][component_name]';
+        inp.value = '';
+    }
+    container.appendChild(clone);
+}
+
+function removeAssignmentRow(event) {
+    var btn = event.target;
+    var row = btn.closest('.assignment-row');
+    if (!row) return;
+    var container = document.getElementById('assignment-container');
+    if (!container) return;
+    var rows = container.getElementsByClassName('assignment-row');
+    if (rows.length > 1) {
+        container.removeChild(row);
+    } else {
+        // If only one row left, clear its values instead of removing
+        var sel = row.querySelector('select');
+        if (sel) sel.value = '';
+        var inp = row.querySelector('input[type="text"]');
+        if (inp) inp.value = '';
+    }
+}
+</script>

@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Edit Asset</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Tailwind via CDN (safe fallback if your layout isn't used here) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+<div class="max-w-5xl mx-auto px-4 py-6">
+    <h1 class="text-2xl font-semibold text-gray-900 mb-4">Edit Asset</h1>
+
+    {{-- Errors --}}
+    @if ($errors->any())
+        <div class="mb-4 rounded-md bg-red-50 p-4">
+            <div class="flex">
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-red-800">There were some problems with your input:</h3>
+                    <div class="mt-2 text-sm text-red-700">
+                        <ul class="list-disc pl-5 space-y-1">
+                            @foreach ($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    <form method="POST" action="{{ route('assets.update', $asset->id) }}" class="bg-white rounded-lg shadow-sm border p-4">
+        @csrf
+        @method('PUT')
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {{-- Name --}}
+            <div>
+                <label for="name" class="block font-medium text-sm text-gray-700">Name</label>
+                <input type="text" name="name" id="name"
+                       value="{{ old('name', $asset->name) }}"
+                       class="mt-1 w-full rounded-md border-gray-300 shadow-sm"/>
+            </div>
+
+            {{-- Department (optional) --}}
+            <div>
+                <label for="department_id" class="block font-medium text-sm text-gray-700">Department</label>
+                <select name="department_id" id="department_id" class="mt-1 w-full rounded-md border-gray-300 shadow-sm">
+                    @isset($departments)
+                        @foreach ($departments as $department)
+                            <option value="{{ $department->id }}"
+                                {{ (string)old('department_id', $asset->department_id) === (string)$department->id ? 'selected' : '' }}>
+                                {{ $department->name }}
+                            </option>
+                        @endforeach
+                    @else
+                        <option value="">—</option>
+                    @endisset
+                </select>
+            </div>
+
+            {{-- Location --}}
+            <div class="md:col-span-2">
+                <label for="location" class="block font-medium text-sm text-gray-700">Location</label>
+                <input type="text" name="location" id="location"
+                       value="{{ old('location', $asset->location) }}"
+                       class="mt-1 w-full rounded-md border-gray-300 shadow-sm"/>
+            </div>
+
+            {{-- Tags (optional, multi) --}}
+            <div class="md:col-span-2">
+                <label class="block font-medium text-sm text-gray-700">Tags</label>
+                <div class="mt-2 flex flex-wrap gap-3">
+                    @isset($tags)
+                        @php
+                            $assetTagIds = isset($asset->tags) ? $asset->tags->pluck('id')->map(fn($i)=>(string)$i)->all() : [];
+                            $oldTagIds = collect(old('tags', $assetTagIds))->map(fn($i)=>(string)$i)->all();
+                        @endphp
+                        @foreach ($tags as $tag)
+                            @php $checked = in_array((string)$tag->id, $oldTagIds, true) ? 'checked' : ''; @endphp
+                            <label class="inline-flex items-center space-x-2">
+                                <input type="checkbox" name="tags[]" value="{{ $tag->id }}" {{ $checked }}
+                                       class="rounded border-gray-300">
+                                <span class="text-sm text-gray-800">{{ $tag->name }}</span>
+                            </label>
+                        @endforeach
+                    @else
+                        <p class="text-sm text-gray-500">No tags available.</p>
+                    @endisset
+                </div>
+            </div>
+
+            {{-- Parent/Child (optional) --}}
+            <div>
+                <label for="parent_asset_id" class="block font-medium text-sm text-gray-700">Parent Asset</label>
+                <select name="parent_asset_id" id="parent_asset_id"
+                        class="mt-1 w-full rounded-md border-gray-300 shadow-sm">
+                    <option value="">None</option>
+                    @isset($availableChildren)
+                        @foreach ($availableChildren as $assetOption)
+                            <option value="{{ $assetOption->id }}"
+                                {{ (string)old('parent_asset_id', $asset->parent_asset_id) === (string)$assetOption->id ? 'selected' : '' }}>
+                                {{ $assetOption->name }}
+                            </option>
+                        @endforeach
+                    @endisset
+                </select>
+            </div>
+        </div>
+
+        {{-- PM Checklist Assignments (single, working section) --}}
+        <div class="mt-8">
+            <h2 class="text-lg font-medium text-gray-900 mb-3">PM Checklist Assignments</h2>
+
+            <div class="overflow-x-auto">
+                <table id="assignment-table" class="min-w-full text-sm border-t border-gray-200">
+                    <tbody id="assignment-body">
+                    @php $existing = isset($asset->checklistTemplates) ? $asset->checklistTemplates : collect(); @endphp
+                    @forelse($existing as $idx => $assignment)
+                        <tr class="assignment-row border-b border-gray-200">
+                            <td class="py-2 pr-2 w-1/2">
+                                <select name="checklist_assignments[{{ $idx }}][template_id]"
+                                        class="w-full p-2 rounded-md border-gray-300">
+                                    <option value="">None (Use standard log form)</option>
+                                    @isset($checklistTemplates)
+                                        @foreach ($checklistTemplates as $template)
+                                            <option value="{{ $template->id }}"
+                                                {{ (string)$assignment->id === (string)$template->id ? 'selected' : '' }}>
+                                                {{ $template->name }}
+                                            </option>
+                                        @endforeach
+                                    @endisset
+                                </select>
+                            </td>
+                            <td class="py-2 pr-2">
+                                <input type="text"
+                                       name="checklist_assignments[{{ $idx }}][component_name]"
+                                       value="{{ $assignment->pivot->component_name ?? '' }}"
+                                       placeholder="Component name"
+                                       class="w-full p-2 rounded-md border-gray-300">
+                            </td>
+                            <td class="py-2 text-right">
+                                <button type="button"
+                                        class="remove-row inline-flex items-center px-2 py-1 text-xs rounded bg-red-500 text-white hover:bg-red-600">
+                                    Remove
+                                </button>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr class="assignment-row border-b border-gray-200">
+                            <td class="py-2 pr-2 w-1/2">
+                                <select name="checklist_assignments[0][template_id]"
+                                        class="w-full p-2 rounded-md border-gray-300">
+                                    <option value="">None (Use standard log form)</option>
+                                    @isset($checklistTemplates)
+                                        @foreach ($checklistTemplates as $template)
+                                            <option value="{{ $template->id }}">{{ $template->name }}</option>
+                                        @endforeach
+                                    @endisset
+                                </select>
+                            </td>
+                            <td class="py-2 pr-2">
+                                <input type="text"
+                                       name="checklist_assignments[0][component_name]"
+                                       value=""
+                                       placeholder="Component name"
+                                       class="w-full p-2 rounded-md border-gray-300">
+                            </td>
+                            <td class="py-2 text-right">
+                                <button type="button"
+                                        class="remove-row inline-flex items-center px-2 py-1 text-xs rounded bg-red-500 text-white hover:bg-red-600">
+                                    Remove
+                                </button>
+                            </td>
+                        </tr>
+                    @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="mt-3">
+                <button id="add-assignment" type="button"
+                        class="inline-flex items-center px-3 py-1.5 text-xs rounded bg-blue-600 text-white hover:bg-blue-700">
+                    Add PM Template
+                </button>
+            </div>
+        </div>
+
+        {{-- Action buttons --}}
+        <div class="mt-8 flex items-center justify-between gap-4">
+            <a href="{{ route('assets.show', $asset->id) }}"
+               class="inline-flex items-center px-4 py-2 rounded bg-gray-200 text-gray-800 hover:bg-gray-300">
+                Cancel
+            </a>
+            <button type="submit"
+                    class="inline-flex items-center px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700">
+                Update Asset
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+// === PM Assignment UI (add/remove) ===
+document.addEventListener('DOMContentLoaded', function() {
+    var addBtn = document.getElementById('add-assignment');
+    var container = document.getElementById('assignment-body');
+
+    function updateNames(row, idx) {
+        var sel = row.querySelector('select');
+        var inp = row.querySelector('input[type="text"]');
+        if (sel) sel.name = 'checklist_assignments['+idx+'][template_id]';
+        if (inp) inp.name = 'checklist_assignments['+idx+'][component_name]';
+    }
+
+    window.addAssignmentRow = function() {
+        if (!container) return;
+        var rows = container.getElementsByClassName('assignment-row');
+        var idx = rows.length;
+        var tmpl = rows[0];
+        if (!tmpl) return;
+
+        var clone = tmpl.cloneNode(true);
+        var sel = clone.querySelector('select');
+        var inp = clone.querySelector('input[type="text"]');
+        if (sel) sel.value = '';
+        if (inp) inp.value = '';
+
+        updateNames(clone, idx);
+        container.appendChild(clone);
+    };
+
+    window.removeAssignmentRow = function(btn) {
+        if (!container) return;
+        var row = btn.closest ? btn.closest('.assignment-row') : null;
+        if (!row) return;
+
+        var rows = container.getElementsByClassName('assignment-row');
+        if (rows.length > 1) {
+            row.remove();
+            // reindex
+            rows = container.getElementsByClassName('assignment-row');
+            Array.prototype.forEach.call(rows, function(r, i) { updateNames(r, i); });
+        } else {
+            var sel = row.querySelector('select'); if (sel) sel.value = '';
+            var inp = row.querySelector('input[type="text"]'); if (inp) inp.value = '';
+        }
+    };
+
+    if (addBtn) {
+        addBtn.addEventListener('click', function(e) { e.preventDefault(); addAssignmentRow(); });
+    }
+    if (container) {
+        container.addEventListener('click', function(e) {
+            var btn = e.target && (e.target.closest ? e.target.closest('.remove-row') : null);
+            if (btn) { e.preventDefault(); removeAssignmentRow(btn); }
+        });
+    }
+});
+</script>
+</body>
+</html>
+{{-- BEGIN PM ASSIGNMENTS JS (safe append) --}}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var addBtn    = document.getElementById('add-assignment');
+  var container = document.getElementById('assignment-body');
+
+  function updateNames(row, idx) {
+    var sel = row.querySelector('select');
+    var inp = row.querySelector('input[type="text"]');
+    if (sel) sel.name = 'checklist_assignments['+idx+'][template_id]';
+    if (inp) inp.name = 'checklist_assignments['+idx+'][component_name]';
+  }
+
+  function addRow() {
+    if (!container) return;
+    var rows = container.getElementsByClassName('assignment-row');
+    var idx  = rows.length;
+    var tmpl = rows[0];
+    if (!tmpl) return;
+    var clone = tmpl.cloneNode(true);
+    var sel = clone.querySelector('select');
+    var inp = clone.querySelector('input[type="text"]');
+    if (sel) sel.value = '';
+    if (inp) inp.value = '';
+    updateNames(clone, idx);
+    container.appendChild(clone);
+  }
+
+  function removeRow(btn) {
+    if (!container) return;
+    var row = btn.closest ? btn.closest('.assignment-row') : null;
+    if (!row) return;
+    var rows = container.getElementsByClassName('assignment-row');
+    if (rows.length > 1) {
+      row.remove();
+      rows = container.getElementsByClassName('assignment-row');
+      Array.prototype.forEach.call(rows, function(r, i){ updateNames(r, i); });
+    } else {
+      var sel = row.querySelector('select'); if (sel) sel.value = '';
+      var inp = row.querySelector('input[type="text"]'); if (inp) inp.value = '';
+    }
+  }
+
+  if (addBtn) addBtn.addEventListener('click', function (e) { e.preventDefault(); addRow(); });
+
+  if (container) {
+    container.addEventListener('click', function (e) {
+      var btn = e.target && (e.target.closest ? e.target.closest('.remove-row') : null);
+      if (btn) { e.preventDefault(); removeRow(btn); }
+    });
+  }
+});
+</script>
+{{-- END PM ASSIGNMENTS JS --}}

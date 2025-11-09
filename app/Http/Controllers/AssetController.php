@@ -1,0 +1,425 @@
+<?php
+
+namespace App\Http\Controllers;
+
+
+use Illuminate\Support\Facades\DB;
+
+use App\Models\Asset;
+use App\Models\Department;
+use App\Models\Tag;
+use App\Models\Category;
+use App\Models\ChecklistTemplate; // <-- ADDED
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
+use App\Traits\WebhookSender;
+
+class AssetController extends Controller
+{
+    use WebhookSender;
+
+    /**
+     * Display a listing of the resource (Default Hierarchy View).
+     */
+    public function index(Request $request)
+    {
+        $user = Auth::user();
+        $search = $request->input('search');
+
+        $query = Asset::with(['department', 'category', 'tags', 'children'])
+                       ->where('status', 'active')
+                       ->whereNull('parent_asset_id'); // Only get top-level items
+
+        // --- EXPANDED SEARCH LOGIC (WITH TAGS + DEPARTMENTS) ---
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'LIKE', "%{$search}%")
+                  ->orWhere('asset_tag_id', 'LIKE', "%{$search}%")
+                  ->orWhere('location', 'LIKE', "%{$search}%")
+                  ->orWhere('manufacturer', 'LIKE', "%{$search}%")
+                  ->orWhere('model_number', 'LIKE', "%{$search}%")
+                  ->orWhere('serial_number', 'LIKE', "%{$search}%")
+                  // Search by Department Name
+                  ->orWhereHas('department', function ($deptQuery) use ($search) {
+                      $deptQuery->where('name', 'LIKE', "%{$search}%");
+                  })
+                  // Search by Tag Name
+                  ->orWhereHas('tags', function ($tagQuery) use ($search) {
+                      $tagQuery->where('name', 'LIKE', "%{$search}%");
+                  })
+                  // Also search in children for all relevant fields
+                  ->orWhereHas('children', function ($childQuery) use ($search) {
+                      $childQuery->where('name', 'LIKE', "%{$search}%")
+                                 ->orWhere('asset_tag_id', 'LIKE', "%{$search}%")
+                                 ->orWhere('manufacturer', 'LIKE', "%{$search}%")
+                                 ->orWhere('model_number', 'LIKE', "%{$search}%")
+                                 ->orWhere('serial_number', 'LIKE', "%{$search}%")
+                                 ->orWhereHas('tags', function ($tagQuery) use ($search) {
+                                     $tagQuery->where('name', 'LIKE', "%{$search}%");
+                                 })
+                                 ->orWhereHas('department', function ($deptQuery) use ($search) {
+                                     $deptQuery->where('name', 'LIKE', "%{$search}%");
+                                 });
+                  });
+            });
+        }
+        // --- END SEARCH LOGIC ---
+
+        // --- VISIBILITY FILTERING LOGIC ---
+        if ($user->role === 'technician') {
+            if (!$user->relationLoaded('visibleCategories')) {
+                $user->load('visibleCategories');
+            }
+            $allowedCategoryIds = $user->visibleCategories->pluck('id');
+
+            if ($allowedCategoryIds->isEmpty()) {
+                $assets = collect();
+                return view('admin.assets.index', compact('assets', 'search'));
+            }
+
+            $query->where(function($q) use ($allowedCategoryIds) {
+                $q->whereIn('category_id', $allowedCategoryIds)
+                  ->orWhereHas('tags', function($subQuery) use ($allowedCategoryIds) {
+                      $subQuery->whereIn('categories.id', $allowedCategoryIds);
+                  });
+            });
+        }
+        // --- END VISIBILITY FILTERING LOGIC ---
+        
+        $assets = $query->orderBy('name')->get();
+                        
+        return view('admin.assets.index', compact('assets', 'search'));
+    }
+
+    /**
+     * Display a Kanban view of all assets, grouped by Department.
+     */
+    public function kanban()
+    {
+        $user = Auth::user();
+        $query = Asset::with(['department', 'category', 'tags']) // Eager load department
+                       ->where('status', 'active');
+
+        // --- VISIBILITY FILTERING LOGIC ---
+        if ($user->role === 'technician') {
+            if (!$user->relationLoaded('visibleCategories')) {
+                $user->load('visibleCategories');
+            }
+            $allowedCategoryIds = $user->visibleCategories->pluck('id');
+
+            if (!$allowedCategoryIds->isEmpty()) {
+                $query->where(function($q) use ($allowedCategoryIds) {
+                    $q->whereIn('category_id', $allowedCategoryIds)
+                      ->orWhereHas('tags', function($subQuery) use ($allowedCategoryIds) {
+                          $subQuery->whereIn('categories.id', $allowedCategoryIds);
+                      });
+                });
+            } else {
+                $query->whereRaw('1 = 0'); // No categories, return no assets
+            }
+        }
+        // --- END VISIBILITY FILTERING LOGIC ---
+
+        $assets = $query->orderBy('name')->get();
+        
+        $assetsByGroup = $assets->groupBy(function ($asset) {
+            return $asset->department->name ?? 'Unassigned';
+        });
+
+        return view('admin.assets.kanban', compact('assetsByGroup'));
+    }
+
+    /**
+     * Display a sortable, flat list view of all assets.
+     */
+    public function list(Request $request)
+    {
+        $user = Auth::user();
+        $search = $request->input('search');
+        
+        // --- Sortable List Logic ---
+        $sort_by = $request->input('sort_by', 'name'); // Default sort by name
+        $order = $request->input('order', 'asc'); // Default order asc
+        
+        $validSorts = ['asset_tag_id', 'name', 'location', 'department', 'category'];
+        if (!in_array($sort_by, $validSorts)) {
+            $sort_by = 'name';
+        }
+
+        $query = Asset::with(['department', 'category', 'tags'])
+                       ->where('status', 'active');
+                       
+        // --- EXPANDED SEARCH LOGIC (WITH TAGS + DEPARTMENTS) ---
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'LIKE', "%{$search}%")
+                  ->orWhere('asset_tag_id', 'LIKE', "%{$search}%")
+                  ->orWhere('location', 'LIKE', "%{$search}%")
+                  ->orWhere('manufacturer', 'LIKE', "%{$search}%")
+                  ->orWhere('model_number', 'LIKE', "%{$search}%")
+                  ->orWhere('serial_number', 'LIKE', "%{$search}%")
+                  // Search by Department Name
+                  ->orWhereHas('department', function ($deptQuery) use ($search) {
+                      $deptQuery->where('name', 'LIKE', "%{$search}%");
+                  })
+                  // Search by Tag Name
+                  ->orWhereHas('tags', function ($tagQuery) use ($search) {
+                      $tagQuery->where('name', 'LIKE', "%{$search}%");
+                  });
+            });
+        }
+        // --- END SEARCH LOGIC ---
+
+        // --- VISIBILITY FILTERING LOGIC ---
+        if ($user->role === 'technician') {
+            if (!$user->relationLoaded('visibleCategories')) {
+                $user->load('visibleCategories');
+            }
+            $allowedCategoryIds = $user->visibleCategories->pluck('id');
+
+            if (!$allowedCategoryIds->isEmpty()) {
+                $query->where(function($q) use ($allowedCategoryIds) {
+                    $q->whereIn('category_id', $allowedCategoryIds)
+                      ->orWhereHas('tags', function($subQuery) use ($allowedCategoryIds) {
+                          $subQuery->whereIn('categories.id', $allowedCategoryIds);
+                      });
+                });
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        }
+        // --- END VISIBILITY FILTERING LOGIC ---
+        
+        // Handle sorting by relationship
+        if ($sort_by == 'department') {
+            $query->join('departments', 'assets.department_id', '=', 'departments.id')
+                  ->orderBy('departments.name', $order)
+                  ->select('assets.*');
+        } elseif ($sort_by == 'category') {
+             $query->join('categories', 'assets.category_id', '=', 'categories.id')
+                  ->orderBy('categories.name', $order)
+                  ->select('assets.*');
+        } else {
+            $query->orderBy($sort_by, $order);
+        }
+
+        $assets = $query->get();
+                        
+        return view('admin.assets.list', [
+            'assets' => $assets,
+            'search' => $search,
+            'sort_by' => $sort_by,
+            'order' => $order
+        ]);
+    }
+
+
+    /**
+     * Show the form for creating a new resource.
+     */
+    public function create()
+    {
+        $departments = Department::orderBy('name')->get();
+        $tags = Tag::orderBy('name')->get(); 
+        $allAssets = Asset::where('status', 'active')->orderBy('name')->get();
+        
+        return view('admin.assets.create', compact('departments', 'tags', 'allAssets'));
+    }
+
+    /**
+     * Store a newly created resource in storage.
+     */
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'department_id' => 'required|exists:departments,id',
+            'category_id' => 'required|exists:categories,id', 
+            'parent_asset_id' => 'nullable|exists:assets,id', 
+            'tag_ids' => 'nullable|array', 
+            'tag_ids.*' => 'exists:categories,id',
+            'location' => 'nullable|string|max:255',
+            'manufacturer' => 'nullable|string|max:255',
+            'model_number' => 'nullable|string|max:255',
+            'serial_number' => 'nullable|string|max:255',
+            'purchase_cost' => 'nullable|numeric|min:0',
+            'purchase_date' => 'nullable|date',
+            'warranty_expiration_date' => 'nullable|date|after_or_equal:purchase_date',
+            'pm_interval_value' => 'nullable|integer|min:1',
+            'pm_interval_unit' => 'nullable|in:days,weeks,months,years',
+            'pm_procedure_notes' => 'nullable|string',
+            'checklist_assignments' => 'nullable|array', 'checklist_assignments.*.template_id' => 'exists:checklist_templates,id', 'checklist_assignments.*.component_name' => 'nullable|string|max:255', // <-- ADDED
+        ]);
+
+        $department = Department::find($validated['department_id']);
+        $prefix = $department->abbreviation;
+
+        $latestAsset = Asset::where('asset_tag_id', 'LIKE', $prefix . '-%')
+                            ->where('asset_tag_id', 'IS NOT', null)
+                            ->orderByRaw("CAST(SUBSTRING(asset_tag_id, LENGTH('$prefix-') + 1) AS UNSIGNED) DESC")
+                            ->first();
+
+        $nextIdNumber = 1;
+        if ($latestAsset) {
+            $lastNumber = (int)str_replace($prefix . '-', '', $latestAsset->asset_tag_id);
+            $nextIdNumber = $lastNumber + 1;
+        }
+        $newAssetTagId = $prefix . '-' . Str::padLeft($nextIdNumber, 5, '0');
+
+        $validated['asset_tag_id'] = $newAssetTagId;
+        $validated['created_by_user_id'] = Auth::id();
+        $validated['status'] = 'active';
+
+        $asset = Asset::create($validated);
+        $asset->tags()->sync($request->input('tag_ids', []));
+        $this->sendWebhooks('ASSET_CREATED', $asset);
+
+        return redirect()->route('assets.index')
+                         ->with('success', 'Asset created successfully with ID: '. $newAssetTagId);
+    }
+
+    /**
+     * Display the specified resource.
+     */
+    public function show(Asset $asset)
+    {
+        $user = Auth::user();
+
+        // Security Check
+        if ($user->role === 'technician') {
+            if (!$user->relationLoaded('visibleCategories')) {
+                $user->load('visibleCategories');
+            }
+            $allowedCategoryIds = $user->visibleCategories->pluck('id');
+
+            if (!$allowedCategoryIds->contains($asset->category_id) && !$asset->tags->pluck('id')->intersect($allowedCategoryIds)->isNotEmpty()) {
+                return redirect()->route('assets.index')->with('error', 'You do not have permission to view this asset.');
+            }
+        }
+        
+        $asset->load(['department', 'category', 'creator', 'maintenanceLogs.user', 'tags', 'parent', 'children', 'checklistTemplates']);
+        
+        return view('admin.assets.show', compact('asset'));
+    }
+
+    /**
+     * Show the form for editing the specified resource.
+     */
+    public function edit(Asset $asset)
+    {
+        $departments = Department::orderBy('name')->get();
+        $tags = Tag::orderBy('name')->get(); 
+        $categories = Category::orderBy('name')->get(); // <-- 2. ADDED THIS QUERY
+        
+        // THIS IS THE FULL QUERY THAT WAS LIKELY BROKEN
+        $availableChildren = Asset::where('status', 'active')
+                                ->where('id', '!=', $asset->id)
+                                ->where(function ($query) use ($asset) {
+                                    $query->whereNull('parent_asset_id')
+                                          ->orWhere('parent_asset_id', $asset->id); // Include current children
+                                })
+                                ->orderBy('name')
+                                ->get();
+                                
+        $assignedTagIds = $asset->tags->pluck('id')->toArray();
+        $assignedChildIds = $asset->children->pluck('id')->toArray();
+        
+        $checklistTemplates = ChecklistTemplate::orderBy('name')->get();
+        
+        return view('admin.assets.edit', compact(
+            'asset', 'departments', 'tags', 
+            'categories', // <-- 3. ADDED THIS VARIABLE TO COMPACT
+            'availableChildren', 'assignedTagIds', 'assignedChildIds',
+            'checklistTemplates'
+        ));
+    }
+    /**
+     * Update the specified resource in storage.
+     */
+    public function update(Request $request, Asset $asset)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'department_id' => 'required|exists:departments,id',
+            'category_id' => 'required|exists:categories,id', 
+            'parent_asset_id' => [ 
+                'nullable', 
+                'exists:assets,id',
+                function ($attribute, $value, $fail) use ($asset) {
+                    if ($value == $asset->id) {
+                        $fail('An asset cannot be linked as its own parent.');
+                    }
+                }
+            ],
+            'tag_ids' => 'nullable|array', 
+            'tag_ids.*' => 'exists:categories,id',
+            'child_asset_ids' => 'nullable|array', 
+            'child_asset_ids.*' => 'exists:assets,id',
+            'location' => 'nullable|string|max:255',
+            'manufacturer' => 'nullable|string|max:255',
+            'model_number' => 'nullable|string|max:255',
+            'serial_number' => 'nullable|string|max:255',
+            'purchase_cost' => 'nullable|numeric|min:0',
+            'purchase_date' => 'nullable|date',
+            'warranty_expiration_date' => 'nullable|date|after_or_equal:purchase_date',
+            'pm_interval_value' => 'nullable|integer|min:1',
+            'pm_interval_unit' => 'nullable|in:days,weeks,months,years',
+            'pm_procedure_notes' => 'nullable|string',
+            'checklist_assignments' => 'nullable|array', 'checklist_assignments.*.template_id' => 'exists:checklist_templates,id', 'checklist_assignments.*.component_name' => 'nullable|string|max:255', // <-- ADDED
+        ]);
+
+        $asset->update($validated);
+        $asset->tags()->sync($request->input('tag_ids', []));
+
+        // Sync Child Assets
+        $newChildIds = $request->input('child_asset_ids', []);
+        $currentChildIds = $asset->children->pluck('id')->toArray();
+        $assetsToUnlink = array_diff($currentChildIds, $newChildIds);
+        if (!empty($assetsToUnlink)) {
+            Asset::whereIn('id', $assetsToUnlink)->update(['parent_asset_id' => null]);
+        }
+        Asset::whereIn('id', $newChildIds)->update(['parent_asset_id' => $asset->id]);
+        
+        $this->sendWebhooks('ASSET_UPDATED', $asset); 
+
+        
+
+        // --- SYNC CHECKLIST TEMPLATES (pivot: asset_checklist_template) ---
+        $assignments = $request->input('checklist_assignments', []);
+        $sync = [];
+        if (is_array($assignments)) {
+            foreach ($assignments as $row) {
+                $tid = $row['template_id'] ?? null;
+                $cname = $row['component_name'] ?? null;
+                if ($tid) {
+                    $sync[(int) $tid] = ['component_name' => $cname];
+                }
+            }
+        }
+        // Sync the many-to-many with extra pivot column
+        // Requires Asset::checklistTemplates() relationship with ->withPivot('component_name')->withTimestamps()
+        if (method_exists($asset, 'checklistTemplates')) {
+            $asset->checklistTemplates()->sync($sync);
+        }
+        // --- END SYNC CHECKLIST TEMPLATES ---
+return redirect()->route('assets.show', $asset->id)->with('success', 'Asset details updated successfully.');
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     */
+    public function destroy(Asset $asset)
+    {
+        $asset->load('children');
+        if ($asset->children->count() > 0) {
+            return redirect()->route('assets.index')
+                             ->with('error', 'Cannot delete asset. It is a master asset for ' . $asset->children->count() . ' components. Reassign components first.');
+        }
+
+        $asset->delete();
+        
+        return redirect()->route('assets.index')
+                         ->with('success', 'Asset deleted successfully. All associated logs were automatically deleted.');
+    }
+}

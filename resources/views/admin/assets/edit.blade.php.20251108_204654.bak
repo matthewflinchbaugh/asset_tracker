@@ -1,0 +1,255 @@
+<x-app-layout>
+    <x-slot name="header">
+        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+            {{ __('Edit Asset') }}: {{ $asset->name }}
+        </h2>
+    </x-slot>
+
+    <div class="py-6 md:py-10">
+        <div class="mx-auto w-full max-w-6xl px-3 sm:px-6 lg:px-8">
+            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                <div class="p-4 sm:p-6 text-gray-900">
+
+                    @if ($errors->any())
+                        <div class="mb-4 p-4 bg-red-100 text-red-700 rounded">
+                            <strong>Whoops! Something went wrong.</strong>
+                            <ul class="mt-2 list-disc list-inside">
+                                @foreach ($errors->all() as $error)
+                                    <li>{{ $error }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+
+                    <form action="{{ route('assets.update', $asset->id) }}" method="POST" class="space-y-6">
+                        @csrf
+                        @method('PUT')
+
+                        <!-- Basic details -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                            <div>
+                                <label for="name" class="block font-medium text-sm text-gray-700">Name</label>
+                                <input type="text" name="name" id="name" value="{{ old('name', $asset->name) }}" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                            </div>
+
+                            <div>
+                                <label for="asset_tag_id" class="block font-medium text-sm text-gray-700">Asset Tag</label>
+                                <input type="text" name="asset_tag_id" id="asset_tag_id" value="{{ old('asset_tag_id', $asset->asset_tag_id) }}" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                            </div>
+
+                            <div>
+                                <label for="department_id" class="block font-medium text-sm text-gray-700">Department</label>
+                                @php
+                                    $departments = $departments ?? \App\Models\Department::orderBy('name')->get();
+                                @endphp
+                                <select name="department_id" id="department_id" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                                    @foreach ($departments as $department)
+                                        <option value="{{ $department->id }}" {{ (int) old('department_id', $asset->department_id) === (int) $department->id ? 'selected' : '' }}>
+                                            {{ $department->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <!-- Always-editable Category (fallback pulls from DB if controller didn't pass $categories) -->
+                            <div>
+                                <label for="category_id" class="block font-medium text-sm text-gray-700">Category</label>
+                                @php
+                                    $categories = $categories ?? \App\Models\Category::orderBy('name')->get();
+                                @endphp
+                                <select name="category_id" id="category_id" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" required>
+                                    @foreach ($categories as $category)
+                                        <option value="{{ $category->id }}" {{ (int) old('category_id', $asset->category_id) === (int) $category->id ? 'selected' : '' }}>
+                                            {{ $category->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <div>
+                                <label for="location" class="block font-medium text-sm text-gray-700">Location</label>
+                                <input type="text" name="location" id="location" value="{{ old('location', $asset->location) }}" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                            </div>
+
+                            <div>
+                                <label for="documentation_link" class="block font-medium text-sm text-gray-700">Documentation Link</label>
+                                <input type="url" name="documentation_link" id="documentation_link" value="{{ old('documentation_link', $asset->documentation_link) }}" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                            </div>
+                        </div>
+
+                        <!-- Tags -->
+                        <div>
+                            <label class="block font-medium text-sm text-gray-700">Tags</label>
+                            @php
+                                $tags = $tags ?? \App\Models\Category::orderBy('name')->get(); // If your Tags model is different, swap it here
+                                $selectedTags = isset($asset->tags) ? $asset->tags->pluck('id')->toArray() : [];
+                                // Prefer the real Tags model if it exists:
+                                if (class_exists(\App\Models\Tag::class)) {
+                                    $tags = $tags ?? \App\Models\Tag::orderBy('name')->get();
+                                }
+                            @endphp
+                            @if (isset($tags) && count($tags))
+                                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 mt-1">
+                                    @foreach ($tags as $tag)
+                                        <label class="inline-flex items-center space-x-2">
+                                            <input type="checkbox" name="tags[]" value="{{ $tag->id }}" {{ in_array($tag->id, old('tags', $selectedTags)) ? 'checked' : '' }} class="rounded border-gray-300">
+                                            <span class="text-sm text-gray-700">{{ $tag->name }}</span>
+                                        </label>
+                                    @endforeach
+                                </div>
+                            @else
+                                <p class="text-sm text-gray-500">No tags available.</p>
+                            @endif
+                        </div>
+
+                        <!-- Parent/Children -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                            <div>
+                                <label for="parent_asset_id" class="block font-medium text-sm text-gray-700">Parent Asset</label>
+                                @php
+                                    $availableParents = $availableParents ?? \App\Models\Asset::where('status', 'active')->where('id', '!=', $asset->id)->orderBy('name')->get();
+                                @endphp
+                                <select name="parent_asset_id" id="parent_asset_id" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                                    <option value="">None</option>
+                                    @foreach ($availableParents as $p)
+                                        <option value="{{ $p->id }}" {{ (string) old('parent_asset_id', $asset->parent_asset_id) === (string) $p->id ? 'selected' : '' }}>
+                                            {{ $p->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Manufacturer / Model / Serial -->
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+                            <div>
+                                <label for="manufacturer" class="block font-medium text-sm text-gray-700">Manufacturer</label>
+                                <input type="text" name="manufacturer" id="manufacturer" value="{{ old('manufacturer', $asset->manufacturer) }}" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                            </div>
+                            <div>
+                                <label for="model_number" class="block font-medium text-sm text-gray-700">Model</label>
+                                <input type="text" name="model_number" id="model_number" value="{{ old('model_number', $asset->model_number) }}" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                            </div>
+                            <div>
+                                <label for="serial_number" class="block font-medium text-sm text-gray-700">Serial</label>
+                                <input type="text" name="serial_number" id="serial_number" value="{{ old('serial_number', $asset->serial_number) }}" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                            </div>
+                        </div>
+
+                        <!-- Purchase / Warranty -->
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+                            <div>
+                                <label for="purchase_cost" class="block font-medium text-sm text-gray-700">Purchase Cost</label>
+                                <input type="number" step="0.01" min="0" name="purchase_cost" id="purchase_cost" value="{{ old('purchase_cost', $asset->purchase_cost) }}" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                            </div>
+                            <div>
+                                <label for="purchase_date" class="block font-medium text-sm text-gray-700">Purchase Date</label>
+                                <input type="date" name="purchase_date" id="purchase_date" value="{{ old('purchase_date', optional($asset->purchase_date)->format('Y-m-d') ?? $asset->purchase_date) }}" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                            </div>
+                            <div>
+                                <label for="warranty_expiration_date" class="block font-medium text-sm text-gray-700">Warranty Expiration</label>
+                                <input type="date" name="warranty_expiration_date" id="warranty_expiration_date" value="{{ old('warranty_expiration_date', optional($asset->warranty_expiration_date)->format('Y-m-d') ?? $asset->warranty_expiration_date) }}" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                            </div>
+                        </div>
+
+                        <!-- PM Interval / Next Due -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                            <div>
+                                <label for="pm_interval_value" class="block font-medium text-sm text-gray-700">PM Interval</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" min="0" name="pm_interval_value" id="pm_interval_value" value="{{ old('pm_interval_value', $asset->pm_interval_value) }}" class="block mt-1 w-28 rounded-md shadow-sm border-gray-300">
+                                    @php $unit = old('pm_interval_unit', $asset->pm_interval_unit); @endphp
+                                    <select name="pm_interval_unit" id="pm_interval_unit" class="block mt-1 rounded-md shadow-sm border-gray-300">
+                                        <option value="">unit</option>
+                                        <option value="days" {{ $unit==='days'?'selected':'' }}>days</option>
+                                        <option value="weeks" {{ $unit==='weeks'?'selected':'' }}>weeks</option>
+                                        <option value="months" {{ $unit==='months'?'selected':'' }}>months</option>
+                                        <option value="years" {{ $unit==='years'?'selected':'' }}>years</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label for="next_pm_due_date" class="block font-medium text-sm text-gray-700">Next PM Due Date</label>
+                                <input type="date" name="next_pm_due_date" id="next_pm_due_date" value="{{ old('next_pm_due_date', optional($asset->next_pm_due_date)->format('Y-m-d') ?? $asset->next_pm_due_date) }}" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                            </div>
+                        </div>
+
+                        <!-- PM Notes -->
+                        <div>
+                            <label for="pm_procedure_notes" class="block font-medium text-sm text-gray-700">Standard PM Procedure Notes</label>
+                            <textarea name="pm_procedure_notes" id="pm_procedure_notes" rows="4" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">{{ old('pm_procedure_notes', $asset->pm_procedure_notes) }}</textarea>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <!-- PM Checklist Assignments -->
+                        <h3 class="font-semibold text-lg mb-2">PM Checklist Assignments</h3>
+                        @php
+                            $templates = isset($checklistTemplates) ? $checklistTemplates : \App\Models\ChecklistTemplate::orderBy('name')->get();
+                            $existing = isset($asset->checklistTemplates) ? $asset->checklistTemplates : collect();
+                        @endphp
+                        <div id="pm-assignments" class="space-y-3">
+                            @forelse ($existing as $idx => $assignment)
+                                <div class="flex flex-col md:flex-row md:items-center gap-2 border rounded p-2">
+                                    <select name="pm_templates[{{ $idx }}][template_id]" class="rounded border-gray-300 flex-1">
+                                        <option value="">None (Use standard log form)</option>
+                                        @foreach ($templates as $t)
+                                            <option value="{{ $t->id }}" {{ (int) $assignment->id === (int) $t->id ? 'selected' : '' }}>{{ $t->name }}</option>
+                                        @endforeach
+                                    </select>
+                                    <input type="text" name="pm_templates[{{ $idx }}][component_name]" value="{{ $assignment->pivot->component_name }}" placeholder="Component name" class="rounded border-gray-300 flex-1">
+                                    <button type="button" class="px-3 py-1 rounded bg-red-500 text-white" onclick="removeAssignmentRow(this)">Remove</button>
+                                </div>
+                            @empty
+                                <div class="flex flex-col md:flex-row md:items-center gap-2 border rounded p-2">
+                                    <select name="pm_templates[0][template_id]" class="rounded border-gray-300 flex-1">
+                                        <option value="">None (Use standard log form)</option>
+                                        @foreach ($templates as $t)
+                                            <option value="{{ $t->id }}">{{ $t->name }}</option>
+                                        @endforeach
+                                    </select>
+                                    <input type="text" name="pm_templates[0][component_name]" placeholder="Component name" class="rounded border-gray-300 flex-1">
+                                    <button type="button" class="px-3 py-1 rounded bg-red-500 text-white" onclick="removeAssignmentRow(this)">Remove</button>
+                                </div>
+                            @endforelse
+                        </div>
+                        <div class="mt-2">
+                            <button type="button" id="add-assignment" class="inline-flex items-center px-3 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500" onclick="addAssignmentRow()">Add PM Template</button>
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="pt-4 mt-4 border-t flex justify-end gap-2">
+                            <a href="{{ route('assets.show', $asset->id) }}" class="px-4 py-2 bg-gray-200 rounded">Cancel</a>
+                            <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded">Update Asset</button>
+                        </div>
+                    </form>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function addAssignmentRow() {
+            const wrap = document.getElementById('pm-assignments');
+            const idx = wrap.querySelectorAll('select[name^="pm_templates["]').length;
+            const div = document.createElement('div');
+            div.className = 'flex flex-col md:flex-row md:items-center gap-2 border rounded p-2';
+            div.innerHTML = `
+                <select name="pm_templates[${idx}][template_id]" class="rounded border-gray-300 flex-1">
+                    <option value="">None (Use standard log form)</option>
+                    @foreach ($templates as $t)
+                        <option value="{{ $t->id }}">{{ $t->name }}</option>
+                    @endforeach
+                </select>
+                <input type="text" name="pm_templates[${idx}][component_name]" placeholder="Component name" class="rounded border-gray-300 flex-1">
+                <button type="button" class="px-3 py-1 rounded bg-red-500 text-white" onclick="removeAssignmentRow(this)">Remove</button>
+            `;
+            wrap.appendChild(div);
+        }
+        function removeAssignmentRow(btn) {
+            const div = btn.closest('div');
+            if (div) div.remove();
+        }
+    </script>
+</x-app-layout>

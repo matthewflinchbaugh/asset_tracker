@@ -1,0 +1,20 @@
+file,type,reason,ref_count,last_modified
+asset_tracker/public/favicon.ico,asset_image,Image filename not referenced in project,0,2025-11-04T15:00:21
+asset_tracker/app/Http/Requests/StoreLogAttachmentRequest.php,php_class,Class name appears only in its own file (<=1 refs),1,2025-11-07T03:10:12
+asset_tracker/app/Http/Requests/UpdateLogAttachmentRequest.php,php_class,Class name appears only in its own file (<=1 refs),1,2025-11-07T03:10:12
+asset_tracker/app/Policies/LogAttachmentPolicy.php,php_class,Class name appears only in its own file (<=1 refs),1,2025-11-07T03:10:12
+asset_tracker/app/Providers/AssetEditViewComposer.php,php_class,Class name appears only in its own file (<=1 refs),1,2025-11-08T21:00:27
+asset_tracker/app/View/Components/AppLayout.php,php_class,Class name appears only in its own file (<=1 refs),1,2025-11-06T11:52:51
+asset_tracker/app/View/Components/GuestLayout.php,php_class,Class name appears only in its own file (<=1 refs),1,2025-11-06T11:52:51
+asset_tracker/database/factories/LogAttachmentFactory.php,php_class,Class name appears only in its own file (<=1 refs),1,2025-11-07T03:10:12
+asset_tracker/database/factories/UserFactory.php,php_class,Class name appears only in its own file (<=1 refs),1,2025-11-04T15:00:21
+asset_tracker/database/seeders/DatabaseSeeder.php,php_class,Class name appears only in its own file (<=1 refs),1,2025-11-04T15:00:21
+asset_tracker/database/seeders/LogAttachmentSeeder.php,php_class,Class name appears only in its own file (<=1 refs),1,2025-11-07T03:10:12
+asset_tracker/tests/Feature/Auth/AuthenticationTest.php,php_class,Class name appears only in its own file (<=1 refs),1,2025-11-06T11:52:51
+asset_tracker/tests/Feature/Auth/EmailVerificationTest.php,php_class,Class name appears only in its own file (<=1 refs),1,2025-11-06T11:52:51
+asset_tracker/tests/Feature/Auth/PasswordConfirmationTest.php,php_class,Class name appears only in its own file (<=1 refs),1,2025-11-06T11:52:51
+asset_tracker/tests/Feature/Auth/PasswordResetTest.php,php_class,Class name appears only in its own file (<=1 refs),1,2025-11-06T11:52:51
+asset_tracker/tests/Feature/Auth/PasswordUpdateTest.php,php_class,Class name appears only in its own file (<=1 refs),1,2025-11-06T11:52:51
+asset_tracker/tests/Feature/Auth/RegistrationTest.php,php_class,Class name appears only in its own file (<=1 refs),1,2025-11-06T11:52:51
+asset_tracker/tests/Feature/ProfileTest.php,php_class,Class name appears only in its own file (<=1 refs),1,2025-11-06T11:52:51
+

@@ -49,6 +49,22 @@
                                         <option value="decommissioning" {{ old('event_type', $log->event_type) == 'decommissioning' ? 'selected' : '' }}>Decommissioning</option>
                                     </select>
                                 </div>
+				<div class="mt-4">
+    <label class="inline-flex items-center">
+        <input type="checkbox"
+               name="mark_asset_out_of_service"
+               value="1"
+               class="rounded border-gray-300 text-red-600 shadow-sm focus:ring-red-500"
+               {{ old('mark_asset_out_of_service') || ($asset->temporarily_out_of_service ?? false) ? 'checked' : '' }}>
+        <span class="ml-2 text-sm text-gray-700">
+            Mark asset temporarily out of service
+        </span>
+    </label>
+    <p class="text-xs text-gray-500 mt-1">
+        When checked, this asset will be highlighted as "Out of Service" on the Kanban board.
+    </p>
+</div>
+
 
                                 <!-- Service Date -->
                                 <div class="mt-4">

@@ -1,8 +1,27 @@
 <x-app-layout>
-    <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            {{ __('Asset Details') }}: {{ $asset->name }}
-        </h2>
+	<x-slot name="header">
+        <div class="flex items-center justify-between">
+            <div>
+            <div>
+                <h2 class="font-semibold text-xl text-gray-800 leading-tight flex flex-wrap items-center gap-2">
+                    <span>{{ $asset->name }}</span>
+                    @if($asset->asset_tag_id)
+                        <span class="text-gray-500 text-sm">({{ $asset->asset_tag_id }})</span>
+                    @endif
+                </h2>
+
+                <div class="mt-1">
+                    <x-asset-status-badge :asset="$asset" />
+                </div>
+            </div>
+
+            </div>
+
+            {{-- if you already have buttons here (Edit, Back, etc.), keep them on the right --}}
+            <div class="flex items-center space-x-2">
+                {{-- existing buttons go here --}}
+            </div>
+        </div>
     </x-slot>
 
     <div class="py-12">
@@ -43,17 +62,62 @@
                     </div>
                 </form>
                 @endif
+		@if (auth()->user()->role == 'admin')
+		    <div class="flex space-x-3">
+		        {{-- Edit --}}
+		        <a href="{{ route('assets.edit', $asset->id) }}"
+		           class="inline-flex items-center px-4 py-2 bg-gray-800 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-700">
+		            Edit Asset
+			</a>
+			{{-- Export JSON --}}
+			<a href="{{ route('assets.export', $asset->id) }}" 
+				class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500">
+            			  Export JSON
+        		</a>
+	
+		        {{-- Archive --}}
+		        <form method="POST"
+		              action="{{ route('assets.archive', $asset->id) }}"
+		              onsubmit="return confirm('Archive this asset and all of its component assets?');">
+		            @csrf
+		            <button type="submit"
+		                    class="inline-flex items-center px-4 py-2 bg-yellow-500 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-yellow-600">
+		                Archive
+		            </button>
+		        </form>
+	
+		        {{-- Delete --}}
+		        <form method="POST"
+		              action="{{ route('assets.destroy', $asset->id) }}"
+		              onsubmit="return confirm('Permanently delete this asset and all of its component assets? This cannot be undone.');">
+		            @csrf
+		            @method('DELETE')
+		            <button type="submit"
+		                    class="inline-flex items-center px-4 py-2 bg-red-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-red-700">
+		                Delete
+		            </button>
+		        </form>
+		    </div>
+		@endif
+
                 
-                @if (auth()->user()->role == 'admin')
-                <a href="{{ route('assets.edit', $asset->id) }}" class="inline-flex items-center px-4 py-2 bg-gray-800 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-700">
-                    Edit Asset
-                </a>
-                @endif
             </div>
             
             <!-- Main Details -->
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900">
+		                @if($asset->status === 'pending_approval')
+                    <div class="mb-4 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
+                        <span class="font-semibold">Pending approval:</span>
+                        This asset was submitted by a technician and is awaiting approval.
+                        @if(auth()->user()?->role === 'technician' && $asset->created_by_user_id === auth()->id())
+                            You can still edit its details until it has been approved.
+                        @elseif(auth()->user()?->role === 'admin')
+                            You can review and update its status from the Edit Asset page.
+                        @endif
+                    </div>
+                @endif
+
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                         
                         <!-- Column 1: Core Details -->
@@ -255,7 +319,116 @@
                         @empty
                             <p class="text-gray-500">No maintenance logs found for this asset.</p>
                         @endforelse
-                    </div>
+		                        </div> {{-- end parent log list --}}
+
+                    {{-- Child Asset Logs --}}
+                    @php
+                        $childLogs = collect();
+
+                        // Collect all non-draft logs from each child asset
+                        foreach ($asset->children as $child) {
+                            if (!$child->relationLoaded('maintenanceLogs')) {
+                                $child->load('maintenanceLogs.user');
+                            }
+
+                            foreach ($child->maintenanceLogs->where('is_draft', false) as $log) {
+                                $childLogs->push([
+                                    'child' => $child,
+                                    'log'   => $log,
+                                ]);
+                            }
+                        }
+
+                        // Sort child logs by service_date (or created_at as fallback)
+                        $childLogs = $childLogs->sortByDesc(function ($row) {
+                            $log = $row['log'];
+                            return $log->service_date ?? $log->created_at;
+                        });
+                    @endphp
+
+                    @if ($childLogs->isNotEmpty())
+                        <div class="mt-8">
+                            <h4 class="text-md font-medium text-gray-900 mb-2">
+                                Child Asset Logs
+                            </h4>
+
+                            <div class="space-y-4">
+                                @foreach ($childLogs as $row)
+                                    @php
+                                        /** @var \App\Models\Asset $child */
+                                        /** @var \App\Models\MaintenanceLog $log */
+                                        $child = $row['child'];
+                                        $log   = $row['log'];
+                                    @endphp
+
+                                    <div class="border rounded-lg p-4 bg-gray-50">
+                                        <div class="flex justify-between items-start">
+                                            <div>
+                                                <div class="flex flex-wrap items-center gap-2">
+                                                    <span class="font-semibold text-md">
+                                                        {{ $log->event_type_display }}
+                                                    </span>
+
+                                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-200 text-gray-700">
+                                                        Child:
+                                                        <a href="{{ route('assets.show', $child->id) }}"
+                                                           class="ml-1 underline text-indigo-600 hover:text-indigo-800">
+                                                            {{ $child->name }}
+                                                        </a>
+                                                        @if($child->asset_tag_id)
+                                                            <span class="ml-1 text-[10px] text-gray-500">
+                                                                ({{ $child->asset_tag_id }})
+                                                            </span>
+                                                        @endif
+                                                    </span>
+                                                </div>
+
+                                                <p class="text-sm text-gray-500 mt-1">
+                                                    Service date:
+                                                    @if($log->service_date)
+                                                        {{ \Carbon\Carbon::parse($log->service_date)->format('M d, Y') }}
+                                                    @else
+                                                        N/A
+                                                    @endif
+                                                    &nbsp;·&nbsp;
+                                                    Logged by:
+                                                    @if($log->user_id)
+                                                        {{ $log->user->name }}
+                                                    @elseif($log->contractor_company)
+                                                        {{ $log->contractor_rep }} ({{ $log->contractor_company }})
+                                                    @else
+                                                        System
+                                                    @endif
+                                                </p>
+                                            </div>
+
+                                            <div class="text-xs text-gray-500 text-right">
+                                                Log #{{ $log->id }}
+                                            </div>
+                                        </div>
+
+                                        @if($log->description_of_work)
+                                            <div class="mt-2 text-sm text-gray-800 whitespace-pre-line">
+                                                {{ $log->description_of_work }}
+                                            </div>
+                                        @endif
+
+                                        <div class="text-sm mt-2 pt-2 border-t border-gray-200">
+                                            <span class="font-semibold">Parts Cost:</span>
+                                            ${{ number_format($log->parts_cost, 2) }}
+                                            &nbsp;|&nbsp;
+                                            <span class="font-semibold">Labor Hours:</span>
+                                            {{ $log->labor_hours }}
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+
+		
+
+                </div>
 
                 </div>
             </div>

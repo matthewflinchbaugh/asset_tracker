@@ -6,6 +6,13 @@
         </style>
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">
             {{ __('Assets') }}
+	@if(auth()->user()->role === 'admin' || auth()->user()->role === 'manager')
+    <a href="{{ route('assets.bulk_critical.edit') }}"
+       class="inline-flex items-center px-3 py-1.5 border border-amber-300 rounded-md text-xs font-medium text-amber-800 bg-amber-50 hover:bg-amber-100">
+        Bulk Critical Infrastructure
+    </a>
+@endif
+
         </h2>
     </x-slot>
 
@@ -82,7 +89,13 @@
                                         
                                         <!-- Asset Details -->
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $asset->asset_tag_id }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ $asset->name }}</td>
+					<td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+						<div class="flex items-center space-x-2">
+        						<span>{{ $asset->name }}</span>
+        						<x-asset-status-badge :asset="$asset" />
+    						</div>
+					</td>
+
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $asset->category->name ?? 'N/A' }}</td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $asset->department->name ?? 'N/A' }}</td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $asset->location }}</td>

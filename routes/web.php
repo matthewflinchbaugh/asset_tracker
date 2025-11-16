@@ -16,6 +16,7 @@ use App\Http\Controllers\UserCategoryController;
 use App\Http\Controllers\WebhookController;
 use App\Http\Controllers\AssetTagController;
 use App\Http\Controllers\ChecklistTemplateController;
+use App\Http\Controllers\TechnicianPendingAssetController;
 
 // --- PUBLIC (GUEST) ROUTES ---
 Route::get('/log/submit/{token}', [MaintenanceLogController::class, 'showPublicForm'])->name('public.log.form');
@@ -54,6 +55,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Technician Submissions
     Route::get('/submit-equipment', [TechnicianAssetController::class, 'create'])->name('technician.assets.create');
     Route::post('/submit-equipment', [TechnicianAssetController::class, 'store'])->name('technician.assets.store');
+    Route::get('/technician/pending-assets', [TechnicianPendingAssetController::class, 'index'])
+        ->name('technician.pending-assets.index');
+    Route::get('/assets/bulk/critical', [AssetController::class, 'editCriticalBulk'])
+        ->name('assets.bulk_critical.edit');
+    Route::post('/assets/bulk/critical', [AssetController::class, 'updateCriticalBulk'])
+        ->name('assets.bulk_critical.update');
 });
 
 // --- MANAGER & ADMIN ROUTES ---
@@ -74,6 +81,10 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::resource('departments', DepartmentController::class);
     Route::resource('tags', TagController::class)->names('categories'); // This creates /tags/{tag}
     Route::resource('assets', AssetController::class)->except(['index', 'show']);
+    Route::post('assets/{asset}/archive', [AssetController::class, 'archive'])->name('assets.archive');
+    Route::get('assets/{asset}/export', [AssetController::class, 'export'])->name('assets.export');
+    Route::get('assets/import', [AssetController::class, 'showImportForm'])->name('assets.import.form');
+    Route::post('assets/import', [AssetController::class, 'import'])->name('assets.import');
 
     Route::resource('users', UserController::class)->only(['index', 'edit', 'update', 'destroy', 'create', 'store']);
     Route::get('users/{user}/visibility', [UserCategoryController::class, 'edit'])->name('users.visibility.edit'); 

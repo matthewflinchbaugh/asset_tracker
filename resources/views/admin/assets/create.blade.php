@@ -34,6 +34,20 @@
                                     <input type="text" name="name" id="name" value="{{ old('name') }}" required 
                                            class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
                                 </div>
+				<!-- Critical Infrustructure -->
+				<div class="mt-4">
+    <label class="inline-flex items-center">
+        <input type="checkbox"
+               name="is_critical_infrastructure"
+               value="1"
+               class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+               {{ old('is_critical_infrastructure') ? 'checked' : '' }}>
+        <span class="ml-2 text-sm text-gray-700">
+            Critical Infrastructure (if out of service, affects parent asset)
+        </span>
+    </label>
+</div>
+
 
                                 <!-- Department -->
                                 <div class="mt-4">
